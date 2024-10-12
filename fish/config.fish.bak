@@ -1,0 +1,83 @@
+function find_up
+    set path (pwd)
+    while test -n "$path" -a ! -e "$path/.nvmrc"
+        set path (dirname "$path")
+    end
+    echo "$path"
+end
+
+function cd
+    set -l new_dir $argv[1]
+    builtin cd $new_dir
+
+    set nvm_path (find_up)
+    set nvm_path (string trim $nvm_path)
+
+    # If there's no .nvmrc file, use the default nvm version
+    if test -z "$nvm_path"
+        set default_version (nvm version default)
+
+        # If there's no default version, set it to `node`
+        if test "$default_version" = "N/A"
+            nvm alias default node
+            set default_version (nvm version default)
+        end
+
+        # If the current version is not the default version, set it to use the default version
+        if test (nvm current) != "$default_version"
+            nvm use default
+        end
+    else if test -s "$nvm_path/.nvmrc"
+        set nvm_version (cat "$nvm_path/.nvmrc")
+
+        # Check for the locally resolved NVM version
+        set locally_resolved_nvm_version (nvm ls --no-colors "$nvm_version" | tail -1 | string trim -r '->* ')
+
+        # If it's not already installed, install it
+        if test "$locally_resolved_nvm_version" = "N/A"
+            nvm install "$nvm_version"
+        else if test (nvm current) != "$locally_resolved_nvm_version"
+            nvm use "$nvm_version"
+        end
+    end
+end
+
+function set_nvm_version
+    set nvm_path (find_up)
+    set nvm_path (string trim $nvm_path)
+
+    if test -n "$nvm_path" -a -s "$nvm_path/.nvmrc"
+        set nvm_version (cat "$nvm_path/.nvmrc")
+
+        # Check for the locally resolved NVM version
+        set locally_resolved_nvm_version (nvm ls --no-colors "$nvm_version" 2>/dev/null | tail -1)
+        
+        # Remove unwanted characters manually
+        set locally_resolved_nvm_version (string replace -r '^[* ]+|[ ]+->|[ ]+$' '' "$locally_resolved_nvm_version")
+
+        # If it's not already installed, install it
+        if test "$locally_resolved_nvm_version" = "N/A"
+            nvm install "$nvm_version" > /dev/null 2>&1
+        else if test (nvm current) != "$locally_resolved_nvm_version"
+            nvm use "$nvm_version" > /dev/null 2>&1
+        end
+    else
+        # If there is no .nvmrc, set to default
+        set default_version (nvm version default 2>/dev/null)
+
+        if test "$default_version" = "N/A"
+            nvm alias default node > /dev/null 2>&1
+            set default_version (nvm version default 2>/dev/null)
+        end
+
+        if test (nvm current) != "$default_version"
+            nvm use default > /dev/null 2>&1
+        end
+    end
+end
+
+# Call the function on shell startup
+set_nvm_version
+
+set -g fish_greeting ""
+
